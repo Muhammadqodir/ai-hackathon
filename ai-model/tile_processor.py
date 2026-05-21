@@ -361,6 +361,12 @@ def main() -> None:
         for x in x_range
         if tile_intersects_circle(x, y, args.zoom, args.lat, args.lon, args.radius)
     ]
+
+    # Sort centre-outward so downloads and inference prioritise the most
+    # relevant tiles first (spiral order rather than raster scan).
+    _cx, _cy = lat_lon_to_tile(args.lat, args.lon, args.zoom)
+    tasks.sort(key=lambda xy: (xy[0] - _cx) ** 2 + (xy[1] - _cy) ** 2)
+
     total_tiles = len(tasks)
 
     if total_tiles == 0:
