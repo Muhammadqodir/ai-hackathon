@@ -34,6 +34,10 @@ class ProcessAnalysisJob implements ShouldQueue
 
     public function handle(): void
     {
+        $id = $this->analysis->id;
+
+        Log::info("[Analysis:{$id}] Job started.");
+
         $this->analysis->update([
             'status'     => 'processing',
             'started_at' => now(),
@@ -44,6 +48,21 @@ class ProcessAnalysisJob implements ShouldQueue
         $scriptPath = base_path('../ai-model/tile_processor.py');
         $cacheDir   = config('analysis.cache_dir');
         $modelPath  = config('analysis.model_path');
+
+        Log::info("[Analysis:{$id}] Resolved paths", [
+            'python_bin'  => $pythonBin,
+            'script_path' => $scriptPath,
+            'model_path'  => $modelPath,
+            'cache_dir'   => $cacheDir,
+            'python_exists' => file_exists($pythonBin),
+            'script_exists' => file_exists($scriptPath),
+            'model_exists'  => file_exists($modelPath),
+        ]);
+
+        if (! file_exists($pythonBin)) {
+            $this->abort("Python binary not found: {$pythonBin}");
+            return;
+        }
 
         if (! file_exists($scriptPath)) {
             $this->abort("Python script not found: {$scriptPath}");
@@ -72,6 +91,10 @@ class ProcessAnalysisJob implements ShouldQueue
             '--imgsz',     config('analysis.imgsz', 640),
         ]);
 
+        Log::info("[Analysis:{$id}] Spawning Python process", [
+            'command' => implode(' ', $cmd),
+        ]);
+
         $descriptors = [
             0 => ['pipe', 'r'],   // stdin  (closed immediately)
             1 => ['pipe', 'w'],   // stdout (JSON progress lines)
@@ -81,11 +104,15 @@ class ProcessAnalysisJob implements ShouldQueue
         $process = proc_open($cmd, $descriptors, $pipes);
 
         if (! is_resource($process)) {
-            $this->abort('Failed to spawn Python process.');
+            $this->abort('proc_open failed – could not spawn Python process.');
             return;
         }
 
+        Log::info("[Analysis:{$id}] Python process spawned, reading stdout…");
+
         fclose($pipes[0]);   // no stdin needed
+
+        $linesRead = 0;
 
         // Read stdout line-by-line (blocking). The Python script flushes after
         // every emit(), so each fgets() returns as soon as a line is ready.
@@ -98,9 +125,14 @@ class ProcessAnalysisJob implements ShouldQueue
             if ($line === '') {
                 continue;
             }
+            $linesRead++;
+            Log::debug("[Analysis:{$id}] stdout line #{$linesRead}: {$line}");
+
             $data = json_decode($line, true);
             if (is_array($data)) {
                 $this->handlePythonEvent($data);
+            } else {
+                Log::warning("[Analysis:{$id}] Non-JSON stdout line: {$line}");
             }
         }
 
@@ -109,11 +141,17 @@ class ProcessAnalysisJob implements ShouldQueue
         fclose($pipes[2]);
         $exitCode = proc_close($process);
 
+        Log::info("[Analysis:{$id}] Python process finished", [
+            'exit_code'  => $exitCode,
+            'lines_read' => $linesRead,
+            'stderr'     => $stderr ?: '(empty)',
+        ]);
+
         // If Python exited non-zero and we haven't already marked it complete/failed
         $this->analysis->refresh();
         if ($exitCode !== 0 && ! in_array($this->analysis->status, ['completed', 'failed'])) {
             $msg = $stderr
-                ? 'Python stderr: ' . substr($stderr, -500)
+                ? 'Python stderr: ' . substr($stderr, -1000)
                 : "Python process exited with code {$exitCode}.";
             $this->abort($msg);
         }

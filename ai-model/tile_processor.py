@@ -138,6 +138,36 @@ def get_tile_grid(bbox: dict, zoom: int) -> Tuple[range, range]:
     return x_range, y_range
 
 
+def tile_intersects_circle(
+    x: int,
+    y: int,
+    z: int,
+    center_lat: float,
+    center_lon: float,
+    radius_m: float,
+) -> bool:
+    """
+    Return True if the tile rectangle (x, y, z) overlaps the query circle.
+
+    Algorithm: find the closest point on the tile's geographic bounding box
+    to the circle centre, then check whether that distance is within the radius.
+    This correctly handles tiles that are fully inside, partially inside, and
+    completely outside the circle.
+    """
+    nw_lat, nw_lon = tile_to_lat_lon(x,     y,     z)
+    se_lat, se_lon = tile_to_lat_lon(x + 1, y + 1, z)
+
+    # Closest point on the tile bbox to the query centre
+    closest_lat = max(se_lat, min(center_lat, nw_lat))
+    closest_lon = max(nw_lon, min(center_lon, se_lon))
+
+    # Metric distance (approximation valid for radii < 50 km)
+    d_lat = (center_lat - closest_lat) * 111_320.0
+    d_lon = (center_lon - closest_lon) * 111_320.0 * math.cos(math.radians(center_lat))
+
+    return math.sqrt(d_lat * d_lat + d_lon * d_lon) <= radius_m
+
+
 # ── tile download ─────────────────────────────────────────────────────────────
 
 def _build_url(provider: dict, x: int, y: int, z: int) -> str:
@@ -304,7 +334,7 @@ def main() -> None:
                         choices=["esri", "google", "all"],          help="Tile provider")
     parser.add_argument("--conf",      type=float, default=0.25,   help="YOLO confidence threshold")
     parser.add_argument("--iou",       type=float, default=0.45,   help="YOLO NMS IoU threshold")
-    parser.add_argument("--imgsz",     type=int,   default=640,    help="YOLO inference image size")
+    parser.add_argument("--imgsz",     type=int,   default=256,    help="YOLO inference image size")
     args = parser.parse_args()
 
     # ── select providers ──
@@ -322,7 +352,16 @@ def main() -> None:
     # ── compute tile grid ──
     bbox     = bbox_from_center_radius(args.lat, args.lon, args.radius)
     x_range, y_range = get_tile_grid(bbox, args.zoom)
-    total_tiles = len(x_range) * len(y_range)
+
+    # Filter to only tiles that actually intersect the query circle.
+    # A square bounding box over-selects ~21 % extra tiles in the corners.
+    tasks = [
+        (x, y)
+        for y in y_range
+        for x in x_range
+        if tile_intersects_circle(x, y, args.zoom, args.lat, args.lon, args.radius)
+    ]
+    total_tiles = len(tasks)
 
     if total_tiles == 0:
         emit("error", message="No tiles found in the specified area.")
@@ -360,7 +399,6 @@ def main() -> None:
         emit("error", message=f"Failed to load YOLO model: {exc}")
         sys.exit(1)
 
-    tasks      = [(x, y) for y in y_range for x in x_range]
     completed  = 0
 
     def download_task(xy: Tuple[int, int]) -> Tuple[Tuple[int, int], Optional[bytes]]:
