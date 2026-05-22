@@ -217,16 +217,23 @@ class DashboardController extends Controller
                 $query->from('shafof_qurilish_data as s')
                     ->whereNotNull('s.lat')
                     ->whereNotNull('s.lon')
-                    // Quick bounding-box (≈100 m) before the expensive trig
-                    ->whereRaw('s.lat BETWEEN d.center_lat - 0.001  AND d.center_lat + 0.001')
-                    ->whereRaw('s.lon BETWEEN d.center_lon - 0.0013 AND d.center_lon + 0.0013')
-                    // Exact Haversine using the numerically stable formula
+                    // Quick bounding-box pre-filter (≈100 m) before the expensive trig.
+                    // Lon delta is computed per-row using the exact latitude so the
+                    // box is correct at all latitudes, not just ~40°N.
+                    ->whereRaw('s.lat BETWEEN d.center_lat - 0.001 AND d.center_lat + 0.001')
                     ->whereRaw(
-                        '(6371000 * 2 * ASIN(SQRT(
+                        's.lon BETWEEN
+                            d.center_lon - (0.001 / COS(RADIANS(d.center_lat))) AND
+                            d.center_lon + (0.001 / COS(RADIANS(d.center_lat)))'
+                    )
+                    // Exact Haversine — LEAST(1, ...) guards against an ASIN
+                    // domain error when floating-point makes the argument > 1.
+                    ->whereRaw(
+                        '(6371000 * 2 * ASIN(LEAST(1, SQRT(
                             POW(SIN(RADIANS((s.lat - d.center_lat) / 2)), 2) +
                             COS(RADIANS(d.center_lat)) * COS(RADIANS(s.lat)) *
                             POW(SIN(RADIANS((s.lon - d.center_lon) / 2)), 2)
-                        ))) <= ?',
+                        )))) <= ?',
                         [self::MATCH_RADIUS_METRES]
                     );
             })
@@ -243,6 +250,11 @@ class DashboardController extends Controller
         $dlam = deg2rad($lon2 - $lon1);
 
         $a = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
+
+        // Clamp to [0, 1] to guard against floating-point values marginally
+        // outside the valid domain of asin(), which would produce NAN and
+        // silently break the distance comparison.
+        $a = min(1.0, max(0.0, $a));
 
         return 2.0 * $R * asin(sqrt($a));
     }
