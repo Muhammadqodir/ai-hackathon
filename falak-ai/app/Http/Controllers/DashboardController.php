@@ -166,37 +166,41 @@ class DashboardController extends Controller
 
     /**
      * Find the nearest shafof_qurilish_data record within MATCH_RADIUS_METRES.
-     * Uses a bounding-box pre-filter in SQL, then exact Haversine in PHP.
-     * Returns null when no record exists within the radius.
+     *
+     * The bounding-box WHERE clause pre-filters to a small tile so MySQL can
+     * use the idx_lat_lon index.  The Haversine expression in HAVING then
+     * applies the exact circular boundary.  LEAST(1, SQRT(...)) guards ASIN
+     * against a domain error on floating-point values marginally above 1.
      */
     private function findNearestShafof(float $lat, float $lon): ?array
     {
         $deltaLat = self::MATCH_RADIUS_METRES / 111320.0;
         $deltaLon = self::MATCH_RADIUS_METRES / (111320.0 * cos(deg2rad($lat)));
 
-        $candidates = DB::table('shafof_qurilish_data')
+        $nearest = DB::table('shafof_qurilish_data')
             ->whereNotNull('lat')
             ->whereNotNull('lon')
             ->whereBetween('lat', [$lat - $deltaLat, $lat + $deltaLat])
             ->whereBetween('lon', [$lon - $deltaLon, $lon + $deltaLon])
-            ->get();
-
-        $nearest = null;
-        $minDist  = PHP_FLOAT_MAX;
-
-        foreach ($candidates as $s) {
-            $dist = $this->haversine($lat, $lon, (float) $s->lat, (float) $s->lon);
-            if ($dist <= self::MATCH_RADIUS_METRES && $dist < $minDist) {
-                $minDist = $dist;
-                $nearest  = $s;
-            }
-        }
+            ->selectRaw(
+                '*, (6371000 * 2 * ASIN(LEAST(1, SQRT(
+                    POW(SIN(RADIANS((lat - ?) / 2)), 2) +
+                    COS(RADIANS(?)) * COS(RADIANS(lat)) *
+                    POW(SIN(RADIANS((lon - ?) / 2)), 2)
+                )))) AS _distance',
+                [$lat, $lat, $lon]
+            )
+            ->having('_distance', '<=', self::MATCH_RADIUS_METRES)
+            ->orderBy('_distance')
+            ->first();
 
         if ($nearest === null) {
             return null;
         }
 
         $result = (array) $nearest;
+        unset($result['_distance']);
+
         foreach (['rating', 'blocks'] as $field) {
             if (isset($result[$field]) && is_string($result[$field])) {
                 $result[$field] = json_decode($result[$field], true);
@@ -208,7 +212,12 @@ class DashboardController extends Controller
 
     /**
      * Count detected objects that have at least one shafof match within 100 m.
-     * Uses a bounding-box EXISTS sub-query followed by Haversine for precision.
+     *
+     * Uses a correlated EXISTS sub-query with MySQL trig functions.
+     * The bounding-box pre-conditions let MySQL use the idx_lat_lon index on
+     * shafof_qurilish_data before evaluating the more expensive Haversine.
+     * The lon delta is computed per-row via COS(RADIANS(d.center_lat)) so it
+     * is correct at every latitude.  LEAST(1, ...) prevents ASIN domain errors.
      */
     private function countMatchedWithShafof(): int
     {
@@ -217,17 +226,12 @@ class DashboardController extends Controller
                 $query->from('shafof_qurilish_data as s')
                     ->whereNotNull('s.lat')
                     ->whereNotNull('s.lon')
-                    // Quick bounding-box pre-filter (≈100 m) before the expensive trig.
-                    // Lon delta is computed per-row using the exact latitude so the
-                    // box is correct at all latitudes, not just ~40°N.
                     ->whereRaw('s.lat BETWEEN d.center_lat - 0.001 AND d.center_lat + 0.001')
                     ->whereRaw(
                         's.lon BETWEEN
                             d.center_lon - (0.001 / COS(RADIANS(d.center_lat))) AND
                             d.center_lon + (0.001 / COS(RADIANS(d.center_lat)))'
                     )
-                    // Exact Haversine — LEAST(1, ...) guards against an ASIN
-                    // domain error when floating-point makes the argument > 1.
                     ->whereRaw(
                         '(6371000 * 2 * ASIN(LEAST(1, SQRT(
                             POW(SIN(RADIANS((s.lat - d.center_lat) / 2)), 2) +
@@ -238,25 +242,6 @@ class DashboardController extends Controller
                     );
             })
             ->count();
-    }
-
-    /** Haversine distance in metres between two WGS-84 points. */
-    private function haversine(float $lat1, float $lon1, float $lat2, float $lon2): float
-    {
-        $R    = 6371000.0;
-        $phi1 = deg2rad($lat1);
-        $phi2 = deg2rad($lat2);
-        $dphi = deg2rad($lat2 - $lat1);
-        $dlam = deg2rad($lon2 - $lon1);
-
-        $a = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
-
-        // Clamp to [0, 1] to guard against floating-point values marginally
-        // outside the valid domain of asin(), which would produce NAN and
-        // silently break the distance comparison.
-        $a = min(1.0, max(0.0, $a));
-
-        return 2.0 * $R * asin(sqrt($a));
     }
 
     /**
