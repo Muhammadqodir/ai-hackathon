@@ -1,0 +1,72 @@
+[
+        {
+            "id": 1,
+            "name": "Andijon viloyati",
+            "latLon": "{\"lat\": 40.783390, \"lon\": 72.350664}"
+        },
+        {
+            "id": 2,
+            "name": "Buxoro viloyati",
+            "latLon": "{\"lat\": 39.767968, \"lon\": 64.421725}"
+        },
+        {
+            "id": 3,
+            "name": "Farg\u02bbona viloyati",
+            "latLon": "{\"lat\": 40.389448, \"lon\": 71.783135}"
+        },
+        {
+            "id": 4,
+            "name": "Jizzax viloyati",
+            "latLon": "{\"lat\": 40.120302, \"lon\": 67.828544}"
+        },
+        {
+            "id": 6,
+            "name": "Namangan viloyati",
+            "latLon": "{\"lat\": 41.000078, \"lon\": 71.672570}"
+        },
+        {
+            "id": 7,
+            "name": "Navoiy viloyati",
+            "latLon": "{\"lat\": 40.103107, \"lon\": 65.373996}"
+        },
+        {
+            "id": 8,
+            "name": "Qashqadaryo viloyati",
+            "latLon": "{\"lat\": 38.841605, \"lon\": 65.789979}"
+        },
+        {
+            "id": 9,
+            "name": "Qoraqalpog\u02bbiston Respublikasi",
+            "latLon": "{\"lat\": 43.804133, \"lon\": 59.445799}"
+        },
+        {
+            "id": 10,
+            "name": "Samarqand viloyati",
+            "latLon": "{\"lat\": 39.654406, \"lon\": 66.975827}"
+        },
+        {
+            "id": 11,
+            "name": "Sirdaryo viloyati",
+            "latLon": "{\"lat\": 40.509489, \"lon\": 68.769089}"
+        },
+        {
+            "id": 12,
+            "name": "Surxondaryo viloyati",
+            "latLon": "{\"lat\": 37.228581, \"lon\": 67.275451}"
+        },
+        {
+            "id": 14,
+            "name": "Toshkent shahar",
+            "latLon": "{\"lat\": 41.311151, \"lon\": 69.279737}"
+        },
+        {
+            "id": 13,
+            "name": "Toshkent viloyati",
+            "latLon": "{\"lat\": 41.311151, \"lon\": 69.279737}"
+        },
+        {
+            "id": 5,
+            "name": "Xorazm viloyati",
+            "latLon": "{\"lat\": 41.550458, \"lon\": 60.631476}"
+        }
+    ]

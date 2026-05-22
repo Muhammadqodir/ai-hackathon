@@ -640,3 +640,308 @@ python ai-model/tile_processor.py \
   --model  ai-model/best.pt \
   --cache-dir /tmp/tile_cache
 ```
+
+---
+
+---
+
+# Shaffof Qurilish Data API
+
+Data sourced from [dshk.shaffofqurilish.uz](https://dshk.shaffofqurilish.uz/) — the Uzbekistan national construction transparency registry. 4 100+ construction objects are pre-loaded via the Python parser + Laravel seeder.
+
+## Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/shafof-qurilish` | Paginated list with filters |
+| `GET` | `/api/shafof-qurilish/stats` | Aggregate statistics |
+| `GET` | `/api/shafof-qurilish/{object_id}` | Full detail for one object |
+
+---
+
+### 1. `GET /api/shafof-qurilish` — List construction objects
+
+Returns a paginated, filterable list of construction objects. List rows include key fields only; use the detail endpoint for the full record.
+
+#### Query parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `search` | string | Full-text search across `name`, `organization_name`, `location_building` |
+| `region_soato` | integer | Filter by region SOATO code (e.g. `1703` = Andijan region) |
+| `district_soato` | integer | Filter by district SOATO code |
+| `status_id` | integer | `1` in-progress · `2` frozen · `3` stopped · `5` delivered |
+| `sphere_id` | integer | Construction sector ID |
+| `difficulty` | string | Complexity class: `I` · `II` · `III` · `IV` |
+| `per_page` | integer | Rows per page (1–200, default `50`) |
+| `page` | integer | Page number (default `1`) |
+
+#### Example
+
+```bash
+# All in-progress objects in Andijan region
+curl "http://localhost:8000/api/shafof-qurilish?region_soato=1703&status_id=1&per_page=20"
+
+# Full-text search
+curl "http://localhost:8000/api/shafof-qurilish?search=Milano+qurilish"
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "current_page": 1,
+  "data": [
+    {
+      "object_id":         70166,
+      "object_status":     2,
+      "name":              "Андижон вилояти Асака тумани \"Байналминал\" МФЙдаги 40-ДМТТни мукаммал таъмирлаш",
+      "sphere_id":         15,
+      "organization_name": "\"VAZIRLAR MAHKAMASI HUZURIDAGI ENERGIYA SAMARADORLIGI MILLIY AGENTLIGI\" DAVLAT MUASSASASI",
+      "status_id":         2,
+      "status_name":       "Jarayonda",
+      "difficulty":        "II",
+      "lat":               40.6529181190822,
+      "lon":               72.252675890923,
+      "region_soato":      1703,
+      "district_soato":    1703224,
+      "deadline":          "2027-01-15",
+      "block_count":       1,
+      "apartment_count":   0,
+      "reestr_number":     "273935",
+      "fetched_at":        "2026-05-22T00:23:14.000000Z"
+    }
+  ],
+  "first_page_url": "http://localhost:8000/api/shafof-qurilish?page=1",
+  "from":           1,
+  "last_page":      83,
+  "last_page_url":  "http://localhost:8000/api/shafof-qurilish?page=83",
+  "next_page_url":  "http://localhost:8000/api/shafof-qurilish?page=2",
+  "path":           "http://localhost:8000/api/shafof-qurilish",
+  "per_page":       50,
+  "prev_page_url":  null,
+  "to":             50,
+  "total":          4112
+}
+```
+
+#### List row fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | integer | Unique object ID from the source registry |
+| `object_status` | integer | Raw numeric status from the list endpoint |
+| `name` | string | Full project name (Uzbek/Russian/Cyrillic) |
+| `sphere_id` | integer | Construction sector ID |
+| `organization_name` | string | Investor / developer legal name |
+| `status_id` | integer | `1` in-progress · `2` frozen · `3` stopped · `5` delivered |
+| `status_name` | string | Human-readable status label |
+| `difficulty` | string | Complexity class: `I`–`IV` |
+| `lat` / `lon` | float | WGS-84 coordinates |
+| `region_soato` | integer | SOATO region code |
+| `district_soato` | integer | SOATO district code |
+| `deadline` | date \| null | Planned completion date (`Y-m-d`) |
+| `block_count` | integer | Number of building blocks |
+| `apartment_count` | integer | Total apartments across all blocks |
+| `reestr_number` | string \| null | Registry / protocol reference number |
+| `fetched_at` | ISO 8601 | When this record was scraped |
+
+---
+
+### 2. `GET /api/shafof-qurilish/stats` — Aggregate statistics
+
+Returns summary counts and totals across the entire dataset. No parameters.
+
+#### Example
+
+```bash
+curl http://localhost:8000/api/shafof-qurilish/stats
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "totals": {
+    "total_objects":   4112,
+    "total_blocks":    4596,
+    "total_apartments": 44694,
+    "total_regions":   14,
+    "total_districts": 183,
+    "total_spheres":   62
+  },
+  "by_status": [
+    { "status_id": 1, "status_name": "Jarayonda",   "count": 1137 },
+    { "status_id": 2, "status_name": "Muzlatilgan", "count": 38   },
+    { "status_id": 3, "status_name": "Toxtatilgan", "count": 50   },
+    { "status_id": 5, "status_name": "Topshirilgan","count": 2855 }
+  ],
+  "by_difficulty": [
+    { "difficulty": "I",   "count": 423  },
+    { "difficulty": "II",  "count": 1204 },
+    { "difficulty": "III", "count": 1897 },
+    { "difficulty": "IV",  "count": 588  }
+  ],
+  "by_region": [
+    { "region_soato": 1726, "count": 812 },
+    { "region_soato": 1703, "count": 734 }
+  ]
+}
+```
+
+#### `totals` fields
+
+| Field | Description |
+|---|---|
+| `total_objects` | Total construction objects in the database |
+| `total_blocks` | Sum of all building blocks across all objects |
+| `total_apartments` | Sum of all apartments across all objects |
+| `total_regions` | Number of distinct regions (SOATO codes) represented |
+| `total_districts` | Number of distinct districts represented |
+| `total_spheres` | Number of distinct construction sectors represented |
+
+---
+
+### 3. `GET /api/shafof-qurilish/{object_id}` — Object detail
+
+Returns the complete record for a single construction object, including nested blocks and rating data.
+
+#### Path parameter
+
+| Parameter | Type | Description |
+|---|---|---|
+| `object_id` | integer | The `object_id` from the source registry (not the database `id`) |
+
+#### Example
+
+```bash
+curl http://localhost:8000/api/shafof-qurilish/70166
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "data": {
+    "id":                  3,
+    "object_id":           70166,
+    "object_status":       2,
+    "name":                "Андижон вилояти Асака тумани \"Байналминал\" МФЙдаги 40-ДМТТни мукаммал таъмирлаш ID:2501032240103002",
+    "task_id":             285848602,
+    "sphere_id":           15,
+    "location_building":   "Baynal Minal MFY, Eski Andijon ko'chasi, 179-uy",
+    "difficulty":          "II",
+    "organization_name":   "\"VAZIRLAR MAHKAMASI HUZURIDAGI ENERGIYA SAMARADORLIGI MILLIY AGENTLIGI\" DAVLAT MUASSASASI",
+    "loyiha":              "INTEGRAL BIRLASHGAN LOYIHA",
+    "pudrat":              "Milano qurilish",
+    "status_id":           2,
+    "status_name":         "Jarayonda",
+    "lat":                 40.6529181190822,
+    "lon":                 72.252675890923,
+    "region_soato":        1703,
+    "district_soato":      1703224,
+    "deadline":            "2027-01-15",
+    "closed_at":           null,
+    "source_created_at":   "2026-04-20T05:35:22.000000Z",
+    "number_protocol":     "0",
+    "reestr_number":       "273935",
+    "rating": [
+      {
+        "loyiha":    { "inn": "306858382", "name": "\"INTEGRAL BIRLASHGAN LOYIHA\" MCHJ", "reyting_loyha": "CC" },
+        "qurilish":  { "inn": "205927782", "name": "\"MILANO QURILISH\" MCHJ", "reyting_umumiy": "CCC" }
+      }
+    ],
+    "block_count":         1,
+    "apartment_count":     0,
+    "blocks": [
+      {
+        "id":              103352,
+        "name":            "А",
+        "apartment_count": null,
+        "accepted":        false,
+        "area":            null,
+        "floor":           "2"
+      }
+    ],
+    "conclusion_url":      "https://api-ekspertiza.mc.uz/appeal-final-conclusion-pdf/110873",
+    "fetched_at":          "2026-05-22T00:23:14.000000Z",
+    "created_at":          "2026-05-22T00:23:14.000000Z",
+    "updated_at":          "2026-05-22T00:23:14.000000Z"
+  }
+}
+```
+
+#### Full record fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | integer | Source registry ID |
+| `object_status` | integer | Raw status from list endpoint |
+| `name` | string | Full project name |
+| `task_id` | integer | Source task/application ID |
+| `sphere_id` | integer | Construction sector |
+| `location_building` | string | Building address |
+| `difficulty` | string | `I` · `II` · `III` · `IV` — structural complexity class |
+| `organization_name` | string | Investor / developer |
+| `loyiha` | string | Design organisation |
+| `pudrat` | string | General contractor |
+| `status_id` / `status_name` | integer / string | Construction status |
+| `lat` / `lon` | float | WGS-84 coordinates |
+| `region_soato` | integer | SOATO region code |
+| `district_soato` | integer | SOATO district code |
+| `deadline` | date \| null | Planned completion (`Y-m-d`) |
+| `closed_at` | datetime \| null | Actual close date |
+| `source_created_at` | datetime | When the object was registered in the source system |
+| `number_protocol` | string \| null | Architectural council protocol text |
+| `reestr_number` | string \| null | State registry reference |
+| `rating` | array \| null | Contractor/designer ratings from the source (`reyting_loyha`, `reyting_umumiy`) |
+| `block_count` | integer | Number of building blocks |
+| `apartment_count` | integer | Total apartments |
+| `blocks` | array | Per-block detail: `id`, `name`, `apartment_count`, `accepted`, `area`, `floor` |
+| `conclusion_url` | string \| null | URL to the official ekspertiza (expert conclusion) PDF |
+| `fetched_at` | datetime | When our scraper last fetched this record |
+
+#### `404 Not Found`
+
+```json
+{ "message": "No query results for model [App\\Models\\ShafofQurilishData]." }
+```
+
+---
+
+### Status codes reference
+
+| `status_id` | `status_name` | Meaning |
+|---|---|---|
+| `1` | Jarayonda | Under construction (in-progress) |
+| `2` | Muzlatilgan | Frozen / suspended |
+| `3` | Toxtatilgan | Stopped |
+| `5` | Topshirilgan | Delivered / completed |
+
+### Difficulty class reference
+
+| `difficulty` | Description |
+|---|---|
+| `I` | Simple — 1–2 storey residential/utility |
+| `II` | Medium complexity |
+| `III` | Complex — multi-storey residential or commercial |
+| `IV` | Highly complex — industrial, infrastructure |
+
+---
+
+### Refreshing the data
+
+The dataset is a point-in-time snapshot. To re-scrape and update:
+
+```bash
+# 1. Fetch all objects with details from the source API
+cd ai-model-src
+python shafofqurilish.py --with-details --workers 10 --out-dir ./output
+
+# 2. Copy the JSON into the Laravel data folder
+cp output/combined.json ../falak-ai/database/data/shafof_qurilish_data.json
+
+# 3. Re-seed (upserts — safe to run repeatedly)
+cd ../falak-ai
+php artisan db:seed --class=ShafofQurilishSeeder
+```

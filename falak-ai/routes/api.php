@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\DetectedObjectController;
+use App\Http\Controllers\ShafofQurilishController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,3 +27,10 @@ Route::prefix('analysis')->group(function () {
 
 // ── Detected objects ──────────────────────────────────────────────────────────
 Route::get('/detected-objects', [DetectedObjectController::class, 'index'])->name('detected-objects.index');
+
+// ── Shaffof Qurilish data ─────────────────────────────────────────────────────
+Route::prefix('shafof-qurilish')->group(function () {
+    Route::get('/',            [ShafofQurilishController::class, 'index'])->name('shafof-qurilish.index');
+    Route::get('/stats',       [ShafofQurilishController::class, 'stats'])->name('shafof-qurilish.stats');
+    Route::get('/{object_id}', [ShafofQurilishController::class, 'show'])->name('shafof-qurilish.show');
+});
