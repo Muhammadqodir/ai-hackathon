@@ -19,7 +19,7 @@ class DashboardController extends Controller
         return response()->json([
             'area_stats'             => $this->buildAreaStats(),
             'detected_objects_stats' => $this->buildDetectedObjectsStats(),
-            'objects'                => $this->buildObjectsList($request),
+            'objects'                => $this->buildObjectsList(),
         ]);
     }
 
@@ -105,14 +105,8 @@ class DashboardController extends Controller
 
     // ── Objects list ───────────────────────────────────────────────────────────
 
-    private function buildObjectsList(Request $request): array
+    private function buildObjectsList(): array
     {
-        $perPage = min((int) $request->input('per_page', 50), 200);
-        $page    = max((int) $request->input('page', 1), 1);
-        $offset  = ($page - 1) * $perPage;
-
-        $total = DB::table('detected_objects')->count();
-
         $rows = DB::table('detected_objects as d')
             ->join('analyses as a', 'd.analysis_id', '=', 'a.id')
             ->select([
@@ -133,8 +127,6 @@ class DashboardController extends Controller
                 'a.district',
             ])
             ->orderByDesc('d.detected_at')
-            ->limit($perPage)
-            ->offset($offset)
             ->get();
 
         $data = [];
@@ -154,11 +146,8 @@ class DashboardController extends Controller
         }
 
         return [
-            'data'         => $data,
-            'total'        => $total,
-            'per_page'     => $perPage,
-            'current_page' => $page,
-            'last_page'    => (int) ceil($total / max($perPage, 1)),
+            'data'  => $data,
+            'total' => count($data),
         ];
     }
 
