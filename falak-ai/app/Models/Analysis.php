@@ -19,6 +19,9 @@ class Analysis extends Model
         'processed_tiles',
         'error_message',
         'bbox',
+        'country',
+        'region',
+        'district',
         'started_at',
         'completed_at',
     ];

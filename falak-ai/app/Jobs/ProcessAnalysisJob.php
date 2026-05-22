@@ -6,6 +6,7 @@ use App\Models\Analysis;
 use App\Models\AnalysisEvent;
 use App\Models\AnalysisTile;
 use App\Models\DetectedObject;
+use App\Services\GeocodingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -44,6 +45,22 @@ class ProcessAnalysisJob implements ShouldQueue
             'started_at' => now(),
         ]);
         $this->emitEvent('status', ['message' => 'Job started.']);
+
+        // ── reverse-geocode the centre point (non-fatal) ──────────────────
+        try {
+            $this->emitEvent('status', ['message' => 'Resolving location…']);
+            $geo = app(GeocodingService::class)->reverseGeocode(
+                $this->analysis->lat,
+                $this->analysis->lon,
+            );
+            if (array_filter($geo)) {
+                $this->analysis->update($geo);
+                Log::info("[Analysis:{$id}] Geocode result", $geo);
+            }
+        } catch (\Throwable $e) {
+            // Geocoding failure must never abort the analysis job
+            Log::warning("[Analysis:{$id}] Geocoding failed: " . $e->getMessage());
+        }
 
         $pythonBin  = config('analysis.python_bin');
         $scriptPath = base_path('../ai-model/tile_processor.py');

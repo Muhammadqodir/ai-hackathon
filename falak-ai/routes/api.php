@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnalysisController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DetectedObjectController;
 use App\Http\Controllers\ShafofQurilishController;
 use Illuminate\Support\Facades\Route;
@@ -10,6 +11,9 @@ use Illuminate\Support\Facades\Route;
 | API Routes
 |--------------------------------------------------------------------------
 */
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
 Route::prefix('analysis')->group(function () {
     // Submit a new analysis (or reuse a cached one)
