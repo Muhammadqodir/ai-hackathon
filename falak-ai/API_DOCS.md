@@ -357,6 +357,64 @@ curl "http://localhost:8000/api/analysis/42/tiles?per_page=10&page=1"
 
 ---
 
+### 5. `GET /api/detected-objects` — All detected objects
+
+Returns every detected object across all analyses in a single flat list, ordered by detection time descending. No pagination.
+
+Each row represents one segmented object: its geographic polygon (converted from pixel space to WGS-84 during job processing), the centroid of that polygon, the YOLO class, and the timestamp it was detected.
+
+#### Example
+
+```bash
+curl http://localhost:8000/api/detected-objects
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "total": 2,
+  "data": [
+    {
+      "id":               17,
+      "analysis_id":      42,
+      "analysis_tile_id": 8,
+      "detected_at":      "2026-05-22T10:16:03.000000Z",
+      "center_lat":       40.38620,
+      "center_lon":       71.77401,
+      "polygon_points":   [
+        [40.38634, 71.77371],
+        [40.38634, 71.77431],
+        [40.38606, 71.77431],
+        [40.38606, 71.77371]
+      ],
+      "class_id":         0,
+      "class_name":       "construction",
+      "confidence":       0.8712
+    }
+  ]
+}
+```
+
+#### Response fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Primary key |
+| `analysis_id` | integer | Parent analysis job |
+| `analysis_tile_id` | integer | Tile the object was found in |
+| `detected_at` | ISO 8601 | When the tile was processed |
+| `center_lat` | float | Centroid latitude (WGS-84) |
+| `center_lon` | float | Centroid longitude (WGS-84) |
+| `polygon_points` | `[[lat,lon], …]` | Polygon vertices in WGS-84 |
+| `class_id` | integer | YOLO class index |
+| `class_name` | string | YOLO class label |
+| `confidence` | float \| null | Detection confidence (0–1) |
+
+> **Note:** Only detections that include a segmentation polygon are stored. Bounding-box-only detections (no mask) are skipped.
+
+---
+
 ## Pixel → Geographic coordinate conversion
 
 Each detection's `bbox` is in **tile-pixel coordinates** (0–255). To convert to WGS-84:

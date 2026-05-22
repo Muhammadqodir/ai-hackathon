@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Analysis;
 use App\Models\AnalysisEvent;
 use App\Models\AnalysisTile;
+use App\Models\DetectedObject;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -183,7 +184,7 @@ class ProcessAnalysisJob implements ShouldQueue
                     $detections = $tile['detections'] ?? [];
 
                     // Upsert avoids duplicate rows if the job is somehow re-run
-                    AnalysisTile::updateOrCreate(
+                    $tileRecord = AnalysisTile::updateOrCreate(
                         [
                             'analysis_id' => $this->analysis->id,
                             'tile_x'      => $tile['x'],
@@ -199,6 +200,12 @@ class ProcessAnalysisJob implements ShouldQueue
                             'from_cache'      => (bool) ($tile['cached'] ?? false),
                         ]
                     );
+
+                    // Persist individual detected objects with geo coordinates
+                    $bbox = $tile['bbox'] ?? [];
+                    if (! empty($bbox) && isset($bbox['north'], $bbox['south'], $bbox['east'], $bbox['west'])) {
+                        $this->saveDetectedObjects($tileRecord, $detections, $bbox);
+                    }
 
                     $this->analysis->increment('processed_tiles');
                 }
@@ -250,6 +257,78 @@ class ProcessAnalysisJob implements ShouldQueue
             'event_type'  => $type,
             'payload'     => $payload,
         ]);
+    }
+
+    /**
+     * Convert pixel-space polygon points to WGS-84 coordinates and persist
+     * each detection as a DetectedObject row.
+     *
+     * Pixel coordinates come from the Python script relative to the 256×256
+     * tile image. The tile's geographic bounding box (north/south/east/west)
+     * is used to interpolate each point to lat/lon.
+     *
+     * @param  AnalysisTile  $tileRecord
+     * @param  array         $detections  Raw detection dicts from Python
+     * @param  array         $bbox        {north, south, east, west}
+     */
+    private function saveDetectedObjects(AnalysisTile $tileRecord, array $detections, array $bbox): void
+    {
+        $north = (float) $bbox['north'];
+        $south = (float) $bbox['south'];
+        $east  = (float) $bbox['east'];
+        $west  = (float) $bbox['west'];
+
+        $latSpan = $north - $south;
+        $lonSpan = $east  - $west;
+
+        // Tile images are always 256×256 pixels
+        $tileSize = 256.0;
+
+        $now = now();
+
+        foreach ($detections as $det) {
+            $polygon = $det['polygon'] ?? null;
+
+            // Skip detections without a segmentation polygon
+            if (empty($polygon) || ! is_array($polygon)) {
+                continue;
+            }
+
+            // Convert pixel [[x,y],...] to geo [[lat,lon],...]
+            $geoPoints = [];
+            foreach ($polygon as $point) {
+                if (! isset($point[0], $point[1])) {
+                    continue;
+                }
+                $px = (float) $point[0];
+                $py = (float) $point[1];
+
+                $lat = $north - ($py / $tileSize) * $latSpan;
+                $lon = $west  + ($px / $tileSize) * $lonSpan;
+
+                $geoPoints[] = [round($lat, 7), round($lon, 7)];
+            }
+
+            if (empty($geoPoints)) {
+                continue;
+            }
+
+            // Centre = arithmetic mean of polygon vertices
+            $centerLat = array_sum(array_column($geoPoints, 0)) / count($geoPoints);
+            $centerLon = array_sum(array_column($geoPoints, 1)) / count($geoPoints);
+
+            DetectedObject::create([
+                'analysis_id'      => $this->analysis->id,
+                'analysis_tile_id' => $tileRecord->id,
+                'detected_at'      => $now,
+                'center_lat'       => round($centerLat, 7),
+                'center_lon'       => round($centerLon, 7),
+                'polygon_points'   => $geoPoints,
+                'class_id'         => (int) ($det['class_id']   ?? 0),
+                'class_name'       => (string) ($det['class_name'] ?? ''),
+                'confidence'       => isset($det['confidence']) ? round((float) $det['confidence'], 4) : null,
+            ]);
+        }
     }
 
     private function abort(string $message): void

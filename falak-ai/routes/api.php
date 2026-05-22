@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnalysisController;
+use App\Http\Controllers\DetectedObjectController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -22,3 +23,6 @@ Route::prefix('analysis')->group(function () {
     // Paginated tile results with raw detections
     Route::get('/{analysis}/tiles',   [AnalysisController::class, 'tiles'])->name('analysis.tiles');
 });
+
+// ── Detected objects ──────────────────────────────────────────────────────────
+Route::get('/detected-objects', [DetectedObjectController::class, 'index'])->name('detected-objects.index');
