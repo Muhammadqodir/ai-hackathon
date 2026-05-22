@@ -110,7 +110,7 @@ class ShafofQurilishSeeder extends Seeder
             'district_soato'    => isset($item['district_soato']) ? (int) $item['district_soato'] : null,
 
             // --- Dates -------------------------------------------------------
-            'deadline'          => $item['deadline'] ?? null, // DATE string or null
+            'deadline'          => $this->toDate($item['deadline'] ?? null),
             'closed_at'         => $this->toDatetime($item['closed_at'] ?? null),
             'source_created_at' => $this->toDatetime($item['source_created_at'] ?? null),
 
@@ -145,6 +145,20 @@ class ShafofQurilishSeeder extends Seeder
         }
 
         return $value;
+    }
+
+    /** Parse any date string to MySQL DATE format (Y-m-d). */
+    private function toDate(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Parse an ISO-8601 / datetime string to MySQL DATETIME format. */
