@@ -55,7 +55,7 @@ return new class extends Migration
 
             // ---- Construction details -------------------------------------
             $table->text('number_protocol')->nullable();
-            $table->string('reestr_number', 64)->nullable();
+            $table->text('reestr_number')->nullable();
 
             // Rating is returned as a JSON string by the API
             // e.g. [{"loyiha": {"inn": "...", "reyting_loyha": "CC"}, "qurilish": {...}}]
