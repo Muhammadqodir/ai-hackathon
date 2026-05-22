@@ -13,7 +13,8 @@ Usage examples:
   # Filter by status (0=all, 1=in-progress, 2=frozen, 3=stopped, 5=delivered)
   python shafofqurilish.py --status 1
 
-  # Full run with details + MySQL SQL dump (all 4 000+ objects, 8 workers)
+  # Full run with details + MySQL SQL dump (all 26 000+ objects, 8 workers)
+  # Default payload: country_id=0, sphere_id=0, status=2 (returns full dataset)
   python shafofqurilish.py --with-details --export-sql --workers 8 --out-dir ./output
 
   # SQL only, no CSV/JSON intermediate files
@@ -489,19 +490,19 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--country-id", type=int, default=1,
-        help="Country filter for list-construction (1 = Uzbekistan, 0 = all — note: 0 may trigger a server bug).",
+        "--country-id", type=int, default=0,
+        help="Country filter for list-construction (0 = all countries).",
     )
     parser.add_argument(
         "--sphere-id", type=int, default=0,
         help="Sphere/sector filter for list-construction (0 = all).",
     )
     parser.add_argument(
-        "--status", type=int, default=0, choices=[0, 1, 2, 3, 5],
+        "--status", type=int, default=2, choices=[0, 1, 2, 3, 5],
         help=(
             "Status filter: 0=all, 1=jarayonda (in-progress), "
-            "2=muzlatilgan (frozen), 3=toxtatilgan (stopped), "
-            "5=topshirilgan (delivered)."
+            "2=all objects (website default, returns full 26k+ dataset), "
+            "3=toxtatilgan (stopped), 5=topshirilgan (delivered)."
         ),
     )
     parser.add_argument(
