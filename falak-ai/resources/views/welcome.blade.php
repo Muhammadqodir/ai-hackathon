@@ -69,7 +69,27 @@
                 line-height: 1.65;
                 text-shadow: 0 1px 6px rgba(0,0,0,0.4);
                 max-width: 600px;
-                margin: 0 auto;
+                margin: 0 auto 2rem;
+            }
+
+            .btn-open {
+                display: inline-block;
+                margin-top: 2rem;
+                padding: 0.85rem 2.4rem;
+                font-size: 1.05rem;
+                font-weight: 600;
+                color: #ffffff;
+                background: linear-gradient(135deg, #1565c0 0%, #0288d1 100%);
+                border-radius: 2rem;
+                text-decoration: none;
+                letter-spacing: 0.03em;
+                box-shadow: 0 4px 24px rgba(2, 136, 209, 0.45);
+                transition: transform 0.18s ease, box-shadow 0.18s ease;
+            }
+
+            .btn-open:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 32px rgba(2, 136, 209, 0.6);
             }
         </style>
     </head>
@@ -84,6 +104,10 @@
             <p class="subtitle">
                 Urbanistika va infratuzilmani sun'iy yo'ldosh ma'lumotlari asosida aqlli monitoring qilish tizimi
             </p>
+
+            <a href="https://nazar-app.alfocus.uz" class="btn-open" target="_blank" rel="noopener noreferrer">
+                Tizimni ochish
+            </a>
         </main>
     </body>
 </html>
